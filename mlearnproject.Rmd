@@ -1,0 +1,108 @@
+---
+title: "Machine Learning Course Project"
+output: html_document
+---
+By Sandra E.
+
+# Project Introduction
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Data
+The training data for this project are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+## Goal
+The goal of your project is to predict the manner in which they did the exercise. This is the “classe” variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+## Data Processing
+Find below a list of libraries that could potentially be required for the completion of this project.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+library(knitr)
+```
+
+## Getting and loading the data
+```{r echo=FALSE}
+trainurl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testurl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+traindata <- read.csv(trainurl, header = TRUE, sep = ",", na.strings = c("NA", "#DIV/0!", ""))
+testdata <- read.csv(testurl, header = TRUE, sep = ",", na.strings = c("NA", "#DIV/0!", ""))
+
+str(traindata)
+str(testdata)
+```
+
+### Cleaning the data
+Using the code shown below, the data is cleaned and ridded of observations with missing values as well as variables that do not add value to our prediction
+
+```{r echo=FALSE}
+#get rid of NA values
+traindata <- traindata[, colSums(is.na(traindata)) == 0]
+testdata <- testdata[, colSums(is.na(testdata)) == 0]
+
+nzv <- nearZeroVar(traindata)
+traindata <- traindata[, -nzv]
+testdata <- testdata[, -nzv]
+
+traindata <- traindata[, -(1:5)]
+testdata <- testdata[, -(1:5)]
+```
+
+Next, we split the cleaned training data set into a 60% pure training data set and a 30% validation data set that we will use to conduct a cross validation of our model later on.
+
+```{r echo = FALSE}
+set.seed(123)
+inTrain <- createDataPartition(y = traindata$classe, p = 0.6, list = FALSE)
+trained <- traindata[inTrain,]
+nottrained <- traindata[-inTrain,]
+```
+
+### Prediction with Random Trees
+We fit a predictive model for activity recognition using Random Forest algorithm because it automatically selects important variables and is robust to correlated covariates & outliers in general. This model will use a 5-fold cross validation. 
+
+```{r}
+fold <- trainControl(method = "cv", 5)
+trainrf <- train(classe ~ ., data = trained, method = "rf", trControl = fold)
+trainrf
+
+trainprd <- predict(trainrf, trained)
+confusionMatrix(trainprd, trained$classe)
+```
+Our cross validation shows an accuracy of 100% which tells us our model is working like it should.
+
+Cross-Validation to estimate the perfomance of the model
+```{r}
+ntrainprd <- predict(trainrf, nottrained)
+confusionMatrix(ntrainprd, nottrained$classe)
+
+# Out-of-Sample Error
+oserror <- 1 - as.numeric(confusionMatrix(ntrainprd, nottrained$classe)$overall[1])
+oserror
+```
+The estimated accuracy of the model is 99.78% and the estimated out-of-sample error is 0.22%, which is great!
+
+## Prediction Results for Test Data Set
+To accomplish this, we apply the model to the 'testdata'
+
+```{r}
+testprd <- predict(trainrf, testdata)
+testprd
+```
+
+## Figure: Decision Tree Visualization
+### Train Set
+```{r fig.width=6, fig.height=7}
+plottr <- rpart(classe ~ ., data = traindata, method = "class")
+prp(plottr)
+```
